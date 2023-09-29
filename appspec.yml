@@ -1,0 +1,12 @@
+version: 0.0
+os: linux
+hooks:
+  ApplicationStop:
+    - location: .aws/scripts/application_stop.sh
+      timeout: 10
+      runas: admin
+  ApplicationStart:
+    - location: .aws/scripts/application_start.sh
+      timeout: 10
+      runas: admin
+

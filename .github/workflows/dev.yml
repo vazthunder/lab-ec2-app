@@ -1,0 +1,58 @@
+---
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ dev ]
+
+env:
+  PROJECT: "lab-ec2"
+  ENV: "dev"
+  APP_NAME: "app"
+  AWS_REGION: "us-east-2"
+  S3_BUCKET: "lab-ec2-dev-deploy"
+
+jobs:
+  build:
+    name: "Build"
+    runs-on: [ "self-hosted", "lab-ec2", "dev", "bastion" ]
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v2
+      - name: "Setup AWS information"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+      - name: "Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          mask-password: true
+      - name: "Build and push the image to Amazon ECR"
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/$PROJECT-$ENV-$APP_NAME:latest .
+          docker push $ECR_REGISTRY/$PROJECT-$ENV-$APP_NAME:latest
+      - name: "Copy CodeDeploy scripts to S3"
+        run: |
+          zip -r $APP_NAME.zip appspec.yml .aws/
+          aws s3 cp $APP_NAME.zip s3://$S3_BUCKET/
+
+  deploy:
+    name: "Deploy"
+    needs: build
+    runs-on: [ "self-hosted", "lab-ecs", "test", "bastion" ]
+    steps:
+      - name: "Setup AWS information"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+      - name: "Deploy app to EC2 fleet"
+        run: |
+          aws deploy create-deployment \
+            --application-name $PROJECT-$ENV-$APP_NAME \ 
+            --deployment-group-name $PROJECT-$ENV-$APP_NAME \
+            --s3-location bucket=$S3_BUCKET,key=$APP_NAME.zip,bundleType=zip
+
+...
