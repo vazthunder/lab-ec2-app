@@ -40,6 +40,8 @@ jobs:
         run: |
           sed -i "s|APP_NAME|$APP_NAME|g" .aws/scripts/*
           sed -i "s|APP_IMAGE|$ECR_REGISTRY/$PROJECT-$ENV-$APP_NAME:latest|g" .aws/scripts/*
+          sed -i "s|AWS_REGION|$AWS_REGION|g" .aws/scripts/*
+          sed -i "s|ECR_REGISTRY|$ECR_REGISTRY|g" .aws/scripts/*
           zip -r $APP_NAME.zip appspec.yml .aws/
           aws s3 cp $APP_NAME.zip s3://$S3_BUCKET/
 
