@@ -34,15 +34,19 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$PROJECT-$ENV-$APP_NAME:latest .
           docker push $ECR_REGISTRY/$PROJECT-$ENV-$APP_NAME:latest
-      - name: "Copy CodeDeploy scripts to S3"
+      - name: "Replace & copy CodeDeploy scripts to S3"
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
+          sed -i "s|APP_NAME|$APP_NAME|g" .aws/scripts/*
+          sed -i "s|APP_IMAGE|$ECR_REGISTRY/$PROJECT-$ENV-$APP_NAME:latest|g" .aws/scripts/*
           zip -r $APP_NAME.zip appspec.yml .aws/
           aws s3 cp $APP_NAME.zip s3://$S3_BUCKET/
 
   deploy:
     name: "Deploy"
     needs: build
-    runs-on: [ "self-hosted", "lab-ecs", "test", "bastion" ]
+    runs-on: [ "self-hosted", "lab-ec2", "dev", "bastion" ]
     steps:
       - name: "Setup AWS information"
         uses: aws-actions/configure-aws-credentials@v4
@@ -50,9 +54,6 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: "Deploy app to EC2 fleet"
         run: |
-          aws deploy create-deployment \
-            --application-name $PROJECT-$ENV-$APP_NAME \ 
-            --deployment-group-name $PROJECT-$ENV-$APP_NAME \
-            --s3-location bucket=$S3_BUCKET,key=$APP_NAME.zip,bundleType=zip
+          aws deploy create-deployment --application-name $PROJECT-$ENV-$APP_NAME --deployment-group-name $PROJECT-$ENV-$APP_NAME --s3-location bucket=$S3_BUCKET,key=$APP_NAME.zip,bundleType=zip --ignore-application-stop-failures
 
 ...
